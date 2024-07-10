@@ -1,0 +1,125 @@
+pipeline {
+    agent any
+    // 环境变量
+    environment {
+        GIT_CREDENTIALS_ID = '' // Jenkins 中配置的凭据 ID
+        DOCKER_CREDENTIALS_ID = ''
+    }
+    // 参数
+    parameters {
+        choice(name: 'PHP_VERSION', choices: ['php8.2', 'php8.1', 'php8.0'], description: 'PHP version')
+        choice(name: 'ENVIRONMENT', choices: ['staging', 'production'], description: 'Select Environment')
+        gitParameter name: 'BRANCH_TAG',
+            type: 'PT_BRANCH_TAG',
+            branchFilter: 'origin/(.*)',
+            defaultValue: 'master',
+            selectedValue: 'DEFAULT',
+            sortMode: 'ASCENDING_SMART',
+            description: 'Select your branch or tag.'
+        string(name: 'VERSION_TAG', defaultValue: '1.0.0', description: 'Enter the version tag.')
+    }
+
+    stages{
+        // 准备工作
+        stage('Prepare') {
+            steps {
+                echo 'Prepared'
+                sh 'rm -rf ./*'
+                sh 'ls -al'
+            }
+        }
+
+        // 拉去代码到 workspace
+        stage('Checkout') {
+            steps {
+                checkout([$class: 'GitSCM',
+                          branches: [[name: params.BRANCH_TAG]],
+                          doGenerateSubmoduleConfigurations: false,
+                          extensions: [],
+                          submoduleCfg: [],
+                          userRemoteConfigs: [[url: 'https://github.com/***',
+                                               credentialsId: env.GIT_CREDENTIALS_ID]]
+                ])
+            }
+        }
+
+        // Setup workspace container
+        stage('Setup') {
+            steps {
+                // 构建步骤
+                script {
+                    if(fileExists('docker-compose.yml')) {
+                       sh 'cp docker-compose.yml docker-compose-bak.yml'
+                    }
+
+                    if(params.PHP_VERSION == 'php8.2') {
+                        configFileProvider(
+                            [configFile(fileId: '', variable: 'DOCKERFILE')]) {
+                                sh "cp ${DOCKERFILE} ${env.WORKSPACE}/docker-compose.yml"
+                        }
+                    } else if(params.PHP_VERSION == 'php8.1') {
+                        configFileProvider(
+                            [configFile(fileId: '', variable: 'DOCKERFILE')]) {
+                                sh "cp ${DOCKERFILE} ${env.WORKSPACE}/docker-compose.yml"
+                        }
+                    } else {
+                        configFileProvider(
+                            [configFile(fileId: '', variable: 'DOCKERFILE')]) {
+                                sh "cp ${DOCKERFILE} ${env.WORKSPACE}/docker-compose.yml"
+                        }
+                    }
+                }
+                sh 'docker compose up -d'
+
+            }
+        }
+
+        // Build docker image
+        stage('Build') {
+            steps{
+                script {
+                    if (params.ENVIRONMENT == 'production') {
+                        sh 'docker compose exec workspace composer install --no-ansi --no-dev --no-interaction --no-plugins --no-progress --no-scripts'
+                        sh 'cp docker/application/releases/Dockerfile.prod Dockerfile'
+                    } else {
+                        sh 'docker compose exec workspace composer install'
+                        sh 'cp docker/application/releases/Dockerfile .'
+                    }
+                    if(fileExists('./bootstrap/cache/**')) {
+                        sh 'rm -rf ./bootstrap/cache/**'
+                    }
+                    sh 'chmod -R 777 storage/'
+                }
+                script {
+                    sh "docker build --no-cache -t ${{DOCKERHUB_NAMESPACE_PROJECT}}-${params.ENVIRONMENT}:${params.VERSION_TAG} ."
+                }
+            }
+        }
+
+        // Push docker image
+        stage('Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'docker login -u $DOCKER_USER -p $DOCKER_PASS'
+                    sh "docker push ${{DOCKERHUB_NAMESPACE_PROJECT}}-${params.ENVIRONMENT}:${params.VERSION_TAG}"
+                    echo "${{DOCKERHUB_NAMESPACE_PROJECT}}-${params.ENVIRONMENT}:${params.VERSION_TAG}"
+                }
+            }
+        }
+
+        // finish
+        stage('Finish') {
+            steps {
+                sh 'docker compose down'
+                sh 'rm -f docker-compose.yml'
+                sh 'rm -f Dockerfile'
+                script {
+                    if(fileExists('docker-compose-bak.yml')) {
+                       sh 'cp docker-compose-bak.yml docker-compose.yml'
+                       sh 'rm -f docker-compose-bak.yml'
+                    }
+                }
+            }
+        }
+    }
+}

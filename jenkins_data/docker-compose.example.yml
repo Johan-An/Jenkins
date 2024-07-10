@@ -1,0 +1,13 @@
+services:
+  
+  ### Workspace Utilities ##################################
+  workspace:
+    image: php-{version}-workspace-image
+    volumes:
+      - /var/www/html:/var/www:cached
+      - /var/www/node_modules
+    tty: true
+    logging:
+      options:
+        max-file: "5"
+        max-size: "10m"
