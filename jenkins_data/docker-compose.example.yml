@@ -1,10 +1,10 @@
 services:
-  
+
   ### Workspace Utilities ##################################
   workspace:
-    image: php-{version}-workspace-image
+    image: angaozhao/laravel-workspace:laravel10-1.0.0
     volumes:
-      - /var/www/html:/var/www:cached
+      - /var/jenkins_home/workspace/{projectName}:/var/www:cached
       - /var/www/node_modules
     tty: true
     logging:
