@@ -54,23 +54,34 @@ pipeline {
 
                     if(params.PHP_VERSION == 'php8.2') {
                         configFileProvider(
-                            [configFile(fileId: '', variable: 'DOCKERFILE')]) {
-                                sh "cp ${DOCKERFILE} ${env.WORKSPACE}/docker-compose.yml"
+                            [configFile(fileId: '***', variable: 'DOCKERFILE')]) {
+                                def dockerComposeTemplate = readFile file: "${DOCKERFILE}"
+                                def dockerCompose = dockerComposeTemplate.replace("{projectName}", currentBuild.projectName)
+                                writeFile file: "${env.WORKSPACE}/docker-compose.yml", text: dockerCompose
+                                echo dockerCompose
                         }
                     } else if(params.PHP_VERSION == 'php8.1') {
                         configFileProvider(
-                            [configFile(fileId: '', variable: 'DOCKERFILE')]) {
-                                sh "cp ${DOCKERFILE} ${env.WORKSPACE}/docker-compose.yml"
+                            [configFile(fileId: '***', variable: 'DOCKERFILE')]) {
+                                def dockerComposeTemplate = readFile file: "${DOCKERFILE}"
+                                def dockerCompose = dockerComposeTemplate.replace("{projectName}", currentBuild.projectName)
+                                writeFile file: "${env.WORKSPACE}/docker-compose.yml", text: dockerCompose
+                                echo dockerCompose
                         }
                     } else {
                         configFileProvider(
-                            [configFile(fileId: '', variable: 'DOCKERFILE')]) {
-                                sh "cp ${DOCKERFILE} ${env.WORKSPACE}/docker-compose.yml"
+                            [configFile(fileId: '***', variable: 'DOCKERFILE')]) {
+                                def dockerComposeTemplate = readFile file: "${DOCKERFILE}"
+                                def dockerCompose = dockerComposeTemplate.replace("{projectName}", currentBuild.projectName)
+                                writeFile file: "${env.WORKSPACE}/docker-compose.yml", text: dockerCompose
+                                echo dockerCompose
                         }
                     }
                 }
-                sh 'docker compose up -d'
-
+                withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'docker login -u $DOCKER_USER -p $DOCKER_PASS'
+                    sh 'docker compose up -d'
+                }
             }
         }
 
@@ -82,6 +93,9 @@ pipeline {
                         sh 'docker compose exec workspace composer install --no-ansi --no-dev --no-interaction --no-plugins --no-progress --no-scripts'
                         sh 'cp docker/application/releases/Dockerfile.prod Dockerfile'
                     } else {
+                        sh 'pwd'
+                        sh 'docker compose exec workspace pwd'
+                        sh 'docker compose exec workspace ls -al'
                         sh 'docker compose exec workspace composer install'
                         sh 'cp docker/application/releases/Dockerfile .'
                     }
@@ -91,7 +105,7 @@ pipeline {
                     sh 'chmod -R 777 storage/'
                 }
                 script {
-                    sh "docker build --no-cache -t ${{DOCKERHUB_NAMESPACE_PROJECT}}-${params.ENVIRONMENT}:${params.VERSION_TAG} ."
+                    sh "docker build --no-cache -t angaozhao/laravel10-${params.ENVIRONMENT}:${params.VERSION_TAG} ."
                 }
             }
         }
@@ -101,8 +115,8 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh 'docker login -u $DOCKER_USER -p $DOCKER_PASS'
-                    sh "docker push ${{DOCKERHUB_NAMESPACE_PROJECT}}-${params.ENVIRONMENT}:${params.VERSION_TAG}"
-                    echo "${{DOCKERHUB_NAMESPACE_PROJECT}}-${params.ENVIRONMENT}:${params.VERSION_TAG}"
+                    sh "docker push angaozhao/laravel10-${params.ENVIRONMENT}:${params.VERSION_TAG}"
+                    echo "angaozhao/laravel10-${params.ENVIRONMENT}:${params.VERSION_TAG}"
                 }
             }
         }
